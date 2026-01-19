@@ -29,9 +29,9 @@ public class TransactionService {
     private final AccountFeignClient accountFeignClient;
     private final EventPublisher eventPublisher;
 
-    public TransactionService(TransactionRepository repository, 
-                             AccountFeignClient accountFeignClient,
-                             EventPublisher eventPublisher) {
+    public TransactionService(TransactionRepository repository,
+            AccountFeignClient accountFeignClient,
+            EventPublisher eventPublisher) {
         this.repository = repository;
         this.accountFeignClient = accountFeignClient;
         this.eventPublisher = eventPublisher;
@@ -81,8 +81,7 @@ public class TransactionService {
             // Mettre à jour le solde du compte
             BalanceUpdateRequest request = new BalanceUpdateRequest(
                     transaction.getAmount(),
-                    operation
-            );
+                    operation);
             accountFeignClient.updateBalance(transaction.getAccountId(), request);
 
             // Marquer la transaction comme réussie
@@ -94,8 +93,7 @@ public class TransactionService {
                     savedTransaction.getId(),
                     savedTransaction.getAccountId(),
                     savedTransaction.getType().name(),
-                    savedTransaction.getAmount()
-            );
+                    savedTransaction.getAmount());
             eventPublisher.publishTransactionCompleted(event);
 
             return savedTransaction;
@@ -139,6 +137,11 @@ public class TransactionService {
         return create(transaction);
     }
 
+    // Ajoutez cette méthode dans TransactionService
+    public TransactionRepository getRepository() {
+        return repository;
+    }
+
     // Méthode pour effectuer un virement
     public Transaction transfer(UUID sourceAccountId, UUID targetAccountId, BigDecimal amount) {
         // D'abord, retirer du compte source
@@ -167,7 +170,7 @@ public class TransactionService {
                 // En cas d'échec, annuler le retrait (rollback)
                 BalanceUpdateRequest rollbackRequest = new BalanceUpdateRequest(amount, "ADD");
                 accountFeignClient.updateBalance(sourceAccountId, rollbackRequest);
-                
+
                 sourceResult.setStatus(Transaction.TransactionStatus.FAILED);
                 sourceResult.setFailureReason("Échec du crédit sur le compte cible : " + e.getMessage());
                 return repository.save(sourceResult);

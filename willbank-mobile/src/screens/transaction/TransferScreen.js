@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -59,6 +60,7 @@ export const TransferScreen = ({ navigation, route }) => {
   );
 
   const handleTransfer = async () => {
+    // ========== VALIDATION ==========
     if (!validateAmount(amount)) {
       Alert.alert('Erreur', 'Veuillez entrer un montant valide');
       return;
@@ -90,30 +92,26 @@ export const TransferScreen = ({ navigation, route }) => {
     try {
       setSubmitting(true);
 
-      // Débiter le compte source
-      const withdrawalData = {
-        accountId: sourceAccount.id,
-        type: TRANSACTION_TYPES.TRANSFER,
+      console.log('💸 Virement en cours:', {
+        sourceAccountId: sourceAccount.id,
+        targetAccountId: destinationAccount.id,  // ✅ CORRECTION ICI
+        amount: transferAmount,
+      });
+
+      // ✅ APPEL API CORRIGÉ
+      const transactionData = {
+        sourceAccountId: sourceAccount.id,
+        targetAccountId: destinationAccount.id,  // ✅ Le backend attend "targetAccountId"
         amount: transferAmount,
       };
 
-      const withdrawalResult = await transactionsAPI.create(withdrawalData);
+      console.log('📤 Envoi virement:', transactionData);
 
-      if (withdrawalResult.status !== 'SUCCESS') {
-        Alert.alert('Échec', withdrawalResult.failureReason || 'Virement échoué');
-        return;
-      }
+      const result = await transactionsAPI.transfer(transactionData);
 
-      // Créditer le compte destination
-      const depositData = {
-        accountId: destinationAccount.id,
-        type: TRANSACTION_TYPES.DEPOSIT,
-        amount: transferAmount,
-      };
+      console.log('📥 Résultat virement:', result);
 
-      const depositResult = await transactionsAPI.create(depositData);
-
-      if (depositResult.status === 'SUCCESS') {
+      if (result.status === 'SUCCESS') {
         Alert.alert(
           'Succès',
           `Virement de ${formatCurrency(amount)} effectué avec succès`,
@@ -125,9 +123,10 @@ export const TransferScreen = ({ navigation, route }) => {
           ]
         );
       } else {
-        Alert.alert('Attention', 'Le virement a été partiellement effectué');
+        Alert.alert('Échec', result.failureReason || 'Virement échoué');
       }
     } catch (error) {
+      console.error('❌ Erreur virement:', error);
       Alert.alert('Erreur', 'Impossible d\'effectuer le virement');
     } finally {
       setSubmitting(false);
@@ -159,12 +158,8 @@ export const TransferScreen = ({ navigation, route }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Compte source</Text>
           {accounts.map((account) => (
-            <Card
+            <TouchableOpacity
               key={account.id}
-              style={[
-                styles.accountCard,
-                sourceAccount?.id === account.id && styles.accountCardSelected,
-              ]}
               onPress={() => {
                 setSourceAccount(account);
                 if (destinationAccount?.id === account.id) {
@@ -172,36 +167,43 @@ export const TransferScreen = ({ navigation, route }) => {
                 }
               }}
             >
-              <View style={styles.accountCardContent}>
-                <View style={styles.accountInfo}>
-                  <Ionicons
-                    name={account.type === 'CURRENT' ? 'card' : 'wallet'}
-                    size={24}
-                    color={
-                      sourceAccount?.id === account.id
-                        ? COLORS.primary
-                        : COLORS.textSecondary
-                    }
-                  />
-                  <View style={styles.accountDetails}>
-                    <Text
-                      style={[
-                        styles.accountType,
-                        sourceAccount?.id === account.id && styles.selectedText,
-                      ]}
-                    >
-                      {formatAccountType(account.type)}
-                    </Text>
-                    <Text style={styles.accountBalance}>
-                      {formatCurrency(account.balance)}
-                    </Text>
+              <Card
+                style={[
+                  styles.accountCard,
+                  sourceAccount?.id === account.id && styles.accountCardSelected,
+                ]}
+              >
+                <View style={styles.accountCardContent}>
+                  <View style={styles.accountInfo}>
+                    <Ionicons
+                      name={account.type === 'CURRENT' ? 'card' : 'wallet'}
+                      size={24}
+                      color={
+                        sourceAccount?.id === account.id
+                          ? COLORS.primary
+                          : COLORS.textSecondary
+                      }
+                    />
+                    <View style={styles.accountDetails}>
+                      <Text
+                        style={[
+                          styles.accountType,
+                          sourceAccount?.id === account.id && styles.selectedText,
+                        ]}
+                      >
+                        {formatAccountType(account.type)}
+                      </Text>
+                      <Text style={styles.accountBalance}>
+                        {formatCurrency(account.balance)}
+                      </Text>
+                    </View>
                   </View>
+                  {sourceAccount?.id === account.id && (
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  )}
                 </View>
-                {sourceAccount?.id === account.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                )}
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -215,44 +217,47 @@ export const TransferScreen = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Compte destination</Text>
           {availableDestinations.length > 0 ? (
             availableDestinations.map((account) => (
-              <Card
+              <TouchableOpacity
                 key={account.id}
-                style={[
-                  styles.accountCard,
-                  destinationAccount?.id === account.id && styles.accountCardSelected,
-                ]}
                 onPress={() => setDestinationAccount(account)}
               >
-                <View style={styles.accountCardContent}>
-                  <View style={styles.accountInfo}>
-                    <Ionicons
-                      name={account.type === 'CURRENT' ? 'card' : 'wallet'}
-                      size={24}
-                      color={
-                        destinationAccount?.id === account.id
-                          ? COLORS.primary
-                          : COLORS.textSecondary
-                      }
-                    />
-                    <View style={styles.accountDetails}>
-                      <Text
-                        style={[
-                          styles.accountType,
-                          destinationAccount?.id === account.id && styles.selectedText,
-                        ]}
-                      >
-                        {formatAccountType(account.type)}
-                      </Text>
-                      <Text style={styles.accountBalance}>
-                        {formatCurrency(account.balance)}
-                      </Text>
+                <Card
+                  style={[
+                    styles.accountCard,
+                    destinationAccount?.id === account.id && styles.accountCardSelected,
+                  ]}
+                >
+                  <View style={styles.accountCardContent}>
+                    <View style={styles.accountInfo}>
+                      <Ionicons
+                        name={account.type === 'CURRENT' ? 'card' : 'wallet'}
+                        size={24}
+                        color={
+                          destinationAccount?.id === account.id
+                            ? COLORS.primary
+                            : COLORS.textSecondary
+                        }
+                      />
+                      <View style={styles.accountDetails}>
+                        <Text
+                          style={[
+                            styles.accountType,
+                            destinationAccount?.id === account.id && styles.selectedText,
+                          ]}
+                        >
+                          {formatAccountType(account.type)}
+                        </Text>
+                        <Text style={styles.accountBalance}>
+                          {formatCurrency(account.balance)}
+                        </Text>
+                      </View>
                     </View>
+                    {destinationAccount?.id === account.id && (
+                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                    )}
                   </View>
-                  {destinationAccount?.id === account.id && (
-                    <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  )}
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
             ))
           ) : (
             <Card style={styles.emptyCard}>
@@ -278,7 +283,7 @@ export const TransferScreen = ({ navigation, route }) => {
             label="Description (optionnel)"
             value={description}
             onChangeText={setDescription}
-            placeholder="Ex: Économies mensuel"
+            placeholder="Ex: Économies mensuelles"
             icon="document-text"
           />
 
@@ -350,52 +355,54 @@ export const TransferScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: COLORS.background,
   },
   scrollView: {
     flex: 1,
   },
   header: {
     alignItems: 'center',
-    marginVertical: 24,
+    padding: 24,
+    paddingTop: 40,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: 'bold',
     color: COLORS.text,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    textAlign: 'center',
   },
   section: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    padding: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   accountCard: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   accountCardSelected: {
-    borderColor: COLORS.primary,
     borderWidth: 2,
+    borderColor: COLORS.primary,
   },
   accountCardContent: {
     flexDirection: 'row',
@@ -405,31 +412,31 @@ const styles = StyleSheet.create({
   accountInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   accountDetails: {
     marginLeft: 12,
+    flex: 1,
   },
   accountType: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   selectedText: {
     color: COLORS.primary,
-    fontWeight: '600',
   },
   accountBalance: {
     fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   transferIcon: {
     alignItems: 'center',
-    marginVertical: 8,
+    marginVertical: 16,
   },
   emptyCard: {
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
   },
   emptyText: {
     fontSize: 14,
@@ -437,35 +444,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   previewCard: {
-    padding: 12,
-    marginTop: 12,
+    marginTop: 16,
+    backgroundColor: COLORS.surface,
   },
   previewLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
+    color: COLORS.text,
+    marginBottom: 12,
   },
   previewSection: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   previewSubtitle: {
     fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
     color: COLORS.textSecondary,
+    marginBottom: 8,
   },
   previewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    alignItems: 'center',
+    marginBottom: 4,
   },
   previewText: {
     fontSize: 14,
     color: COLORS.text,
   },
   previewAmount: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   previewDetail: {
     fontSize: 12,
@@ -473,17 +481,15 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 8,
+    backgroundColor: COLORS.divider,
+    marginVertical: 12,
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginVertical: 24,
+    padding: 16,
+    gap: 12,
   },
   button: {
     flex: 1,
-    marginHorizontal: 4,
   },
 });

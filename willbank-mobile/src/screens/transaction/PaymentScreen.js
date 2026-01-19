@@ -65,95 +65,58 @@ export const PaymentScreen = ({ navigation, route }) => {
   };
 
   const handlePayment = async () => {
-  if (!validateAmount(amount)) {
-    Alert.alert('Erreur', 'Veuillez entrer un montant valide');
-    return;
-  }
-
-  if (!selectedAccount) {
-    Alert.alert('Erreur', 'Veuillez sélectionner un compte');
-    return;
-  }
-
-  if (!merchant.trim()) {
-    Alert.alert('Erreur', 'Veuillez entrer le nom du commerçant');
-    return;
-  }
-
-  const paymentAmount = parseFloat(amount);
-  const currentBalance = parseFloat(selectedAccount.balance);
-
-  if (paymentAmount > currentBalance) {
-    Alert.alert('Erreur', 'Solde insuffisant');
-    return;
-  }
-
-  try {
-    setSubmitting(true);
-
-    // DÉBOGAGE: Afficher selectedAccount
-    console.log('=== COMPTE SÉLECTIONNÉ ===');
-    console.log('selectedAccount:', selectedAccount);
-    console.log('selectedAccount.id:', selectedAccount.id);
-    console.log('Type de accountId:', typeof selectedAccount.id);
-
-    const description = `Paiement chez ${merchant}${reference ? ` - Ref: ${reference}` : ''}`;
-
-    const transactionData = {
-      accountId: selectedAccount.id,
-      type: TRANSACTION_TYPES.PAYMENT,
-      amount: paymentAmount,
-      description: description,
-    };
-
-    console.log('=== DONNÉES À ENVOYER ===');
-    console.log('transactionData:', transactionData);
-    console.log('JSON stringifié:', JSON.stringify(transactionData, null, 2));
-
-    const result = await transactionsAPI.create(transactionData);
-
-    console.log('=== RÉSULTAT REÇU ===');
-    console.log('result:', result);
-
-    if (result.status === 'SUCCESS') {
-      Alert.alert(
-        'Succès',
-        `Paiement de ${formatCurrency(paymentAmount)} effectué avec succès`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
-    } else {
-      Alert.alert('Échec', result.failureReason || 'Paiement échoué');
+    if (!validateAmount(amount)) {
+      Alert.alert('Erreur', 'Veuillez entrer un montant valide');
+      return;
     }
-  } catch (error) {
-    console.error('=== ERREUR ===');
-    console.error('error.message:', error.message);
-    console.error('error.response:', error.response);
-    
-    if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Data:', error.response.data);
-      console.error('Headers:', error.response.headers);
+
+    if (!selectedAccount) {
+      Alert.alert('Erreur', 'Veuillez sélectionner un compte');
+      return;
     }
-    
-    if (error.config) {
-      console.error('URL:', error.config.url);
-      console.error('Method:', error.config.method);
-      console.error('Data envoyée:', error.config.data);
+
+    if (!merchant.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer le nom du commerçant');
+      return;
     }
-    
-    Alert.alert(
-      'Erreur', 
-      error.response?.data?.message || error.message || 'Impossible d\'effectuer le paiement'
-    );
-  } finally {
-    setSubmitting(false);
-  }
-};
+
+    const paymentAmount = parseFloat(amount);
+    const currentBalance = parseFloat(selectedAccount.balance);
+
+    if (paymentAmount > currentBalance) {
+      Alert.alert('Erreur', 'Solde insuffisant');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const transactionData = {
+        accountId: selectedAccount.id,
+        type: TRANSACTION_TYPES.PAYMENT,
+        amount: paymentAmount,
+      };
+
+      console.log('Données envoyées:', JSON.stringify(transactionData, null, 2));
+
+      const result = await transactionsAPI.create(transactionData);
+
+      if (result && result.status === 'SUCCESS') {
+        Alert.alert(
+          'Succès',
+          `Paiement de ${formatCurrency(paymentAmount)} effectué avec succès chez ${merchant}`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert('Échec', result.failureReason || 'Paiement échoué');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      Alert.alert('Erreur', 'Impossible d\'effectuer le paiement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return <Loading message="Chargement des comptes..." />;
@@ -165,7 +128,6 @@ export const PaymentScreen = ({ navigation, route }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content}>
-        {/* ================= COMPTE ================= */}
         <Text style={styles.sectionTitle}>Compte débité</Text>
 
         {accounts.map((account) => (
@@ -207,7 +169,6 @@ export const PaymentScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         ))}
 
-        {/* ================= FORMULAIRE ================= */}
         <Text style={styles.sectionTitle}>Détails du paiement</Text>
 
         <Input
@@ -232,7 +193,6 @@ export const PaymentScreen = ({ navigation, route }) => {
           onChangeText={setReference}
         />
 
-        {/* ================= BOUTON ================= */}
         <Button
           title="Effectuer le paiement"
           onPress={handlePayment}
@@ -244,56 +204,45 @@ export const PaymentScreen = ({ navigation, route }) => {
   );
 };
 
-/* ================= STYLES ================= */
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-
   content: {
     padding: 16,
   },
-
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
     color: COLORS.text,
   },
-
   accountCard: {
     marginBottom: 12,
   },
-
   accountCardSelected: {
     borderWidth: 2,
     borderColor: COLORS.primary,
   },
-
   accountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
   accountType: {
     fontSize: 14,
     color: COLORS.textSecondary,
   },
-
   accountNumber: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
   },
-
   accountRight: {
     alignItems: 'flex-end',
     gap: 6,
   },
-
   accountBalance: {
     fontSize: 16,
     fontWeight: 'bold',

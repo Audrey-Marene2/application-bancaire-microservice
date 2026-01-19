@@ -1,20 +1,18 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ * TransactionServiceWillBank/src/main/java/com/vortexmakers/TransactionServiceWillBank/controller/TransactionController.java
+ * VERSION CORRIGÉE AVEC LOGS DE DEBUG
  */
 package com.vortexmakers.TransactionServiceWillBank.controller;
 
-/**
- *
- * @author DELL
- */
 import com.vortexmakers.TransactionServiceWillBank.entity.Transaction;
 import com.vortexmakers.TransactionServiceWillBank.service.TransactionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -28,29 +26,82 @@ public class TransactionController {
     }
 
     @PostMapping
-    public ResponseEntity<Transaction> createTransaction(@RequestBody TransactionRequest request) {
+    public ResponseEntity<?> createTransaction(@RequestBody TransactionRequest request) {
         try {
+            // ========== LOGS DE DEBUG ==========
+            System.out.println("=== REQUÊTE REÇUE ===");
+            System.out.println("Type: " + request.getType());
+            System.out.println("AccountId: " + request.getAccountId());
+            System.out.println("Amount: " + request.getAmount());
+            System.out.println("TargetAccountId: " + request.getTargetAccountId());
+
+            // ========== VALIDATION ==========
+            if (request.getType() == null || request.getType().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(createError("Le type de transaction est requis"));
+            }
+
+            if (request.getAccountId() == null) {
+                return ResponseEntity.badRequest().body(createError("L'ID du compte est requis"));
+            }
+
+            if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                return ResponseEntity.badRequest().body(createError("Le montant doit être supérieur à zéro"));
+            }
+
+            // ========== TRAITEMENT SELON LE TYPE ==========
             Transaction transaction;
+
             switch (request.getType().toUpperCase()) {
                 case "DEPOSIT":
+                    System.out.println("💰 Traitement d'un DÉPÔT");
                     transaction = service.deposit(request.getAccountId(), request.getAmount());
                     break;
-                case "WITHDRAW":
+
+                case "WITHDRAWAL":
+                    System.out.println("💸 Traitement d'un RETRAIT");
                     transaction = service.withdraw(request.getAccountId(), request.getAmount());
                     break;
+
                 case "TRANSFER":
+                    System.out.println("🔄 Traitement d'un VIREMENT");
+
+                    // ✅ VALIDATION DU TARGET ACCOUNT
                     if (request.getTargetAccountId() == null) {
-                        return ResponseEntity.badRequest().build();
+                        System.err.println("❌ targetAccountId manquant");
+                        return ResponseEntity.badRequest().body(
+                                createError("Le compte de destination est requis pour un virement"));
                     }
-                    transaction = service.transfer(request.getAccountId(), request.getTargetAccountId(),
+
+                    System.out.println("✅ Source: " + request.getAccountId());
+                    System.out.println("✅ Destination: " + request.getTargetAccountId());
+
+                    transaction = service.transfer(
+                            request.getAccountId(),
+                            request.getTargetAccountId(),
                             request.getAmount());
                     break;
+
+                case "PAYMENT":
+                    System.out.println("💳 Traitement d'un PAIEMENT");
+                    transaction = service.create(createPaymentTransaction(request));
+                    break;
+
                 default:
-                    return ResponseEntity.badRequest().build();
+                    System.err.println("❌ Type de transaction inconnu: " + request.getType());
+                    return ResponseEntity.badRequest().body(
+                            createError("Type de transaction invalide: " + request.getType()));
             }
+
+            System.out.println("✅ Transaction créée avec succès: " + transaction.getId());
             return ResponseEntity.ok(transaction);
+
+        } catch (IllegalStateException e) {
+            System.err.println("❌ Erreur métier: " + e.getMessage());
+            return ResponseEntity.badRequest().body(createError(e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            System.err.println("❌ Erreur inattendue: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(createError("Erreur lors de la transaction"));
         }
     }
 
@@ -64,48 +115,37 @@ public class TransactionController {
         return ResponseEntity.ok(service.getByAccount(accountId));
     }
 
-    // Endpoint pour effectuer un dépôt
-    @PostMapping("/deposit")
-    public ResponseEntity<Transaction> deposit(@RequestBody DepositWithdrawRequest request) {
-        try {
-            Transaction transaction = service.deposit(request.getAccountId(), request.getAmount());
-            return ResponseEntity.ok(transaction);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+    // ========== MÉTHODES UTILITAIRES ==========
+
+    private Transaction createPaymentTransaction(TransactionRequest request) {
+        Transaction transaction = new Transaction();
+        transaction.setAccountId(request.getAccountId());
+        transaction.setAmount(request.getAmount());
+        transaction.setType(Transaction.TransactionType.PAYMENT);
+        return transaction;
     }
 
-    // Endpoint pour effectuer un retrait
-    @PostMapping("/withdraw")
-    public ResponseEntity<Transaction> withdraw(@RequestBody DepositWithdrawRequest request) {
-        try {
-            Transaction transaction = service.withdraw(request.getAccountId(), request.getAmount());
-            return ResponseEntity.ok(transaction);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+    private Map<String, Object> createError(String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return error;
     }
 
-    // Endpoint pour effectuer un virement
-    @PostMapping("/transfer")
-    public ResponseEntity<Transaction> transfer(@RequestBody TransferRequest request) {
-        try {
-            Transaction transaction = service.transfer(
-                    request.getSourceAccountId(),
-                    request.getTargetAccountId(),
-                    request.getAmount());
-            return ResponseEntity.ok(transaction);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
+    // ========== DTO INTERNE ==========
 
-    // DTO pour les requêtes de transaction unifiée
     public static class TransactionRequest {
         private UUID accountId;
-        private String type; // DEPOSIT, WITHDRAW, TRANSFER
+        private String type;
         private BigDecimal amount;
-        private UUID targetAccountId; // Pour les transferts
+        private UUID targetAccountId; // ✅ Pour les virements
+        private String merchant; // Pour les paiements
+        private String reference; // Pour les paiements
+
+        public TransactionRequest() {
+        }
+
+        // GETTERS et SETTERS
 
         public UUID getAccountId() {
             return accountId;
@@ -138,58 +178,21 @@ public class TransactionController {
         public void setTargetAccountId(UUID targetAccountId) {
             this.targetAccountId = targetAccountId;
         }
-    }
 
-    // DTO pour les requêtes de dépôt/retrait
-    public static class DepositWithdrawRequest {
-        private UUID accountId;
-        private BigDecimal amount;
-
-        public UUID getAccountId() {
-            return accountId;
+        public String getMerchant() {
+            return merchant;
         }
 
-        public void setAccountId(UUID accountId) {
-            this.accountId = accountId;
+        public void setMerchant(String merchant) {
+            this.merchant = merchant;
         }
 
-        public BigDecimal getAmount() {
-            return amount;
+        public String getReference() {
+            return reference;
         }
 
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
-        }
-    }
-
-    // DTO pour les requêtes de virement
-    public static class TransferRequest {
-        private UUID sourceAccountId;
-        private UUID targetAccountId;
-        private BigDecimal amount;
-
-        public UUID getSourceAccountId() {
-            return sourceAccountId;
-        }
-
-        public void setSourceAccountId(UUID sourceAccountId) {
-            this.sourceAccountId = sourceAccountId;
-        }
-
-        public UUID getTargetAccountId() {
-            return targetAccountId;
-        }
-
-        public void setTargetAccountId(UUID targetAccountId) {
-            this.targetAccountId = targetAccountId;
-        }
-
-        public BigDecimal getAmount() {
-            return amount;
-        }
-
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
+        public void setReference(String reference) {
+            this.reference = reference;
         }
     }
 }
